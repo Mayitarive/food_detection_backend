@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image
 import io
 import requests
+from food_macros import FOOD_MACROS
 
 app = FastAPI()
 
@@ -56,20 +57,12 @@ def detect_objects(image, model):
 
 # Consultar macros desde OpenFoodFacts
 def get_macronutrients(food_name):
-    url = f'https://world.openfoodfacts.org/api/v0/product/{food_name}.json'
-    response = requests.get(url)
-    data = response.json()
-
-    try:
-        product_data = data['product']
-        macronutrients = {
-            'proteins': product_data.get('proteins_100g', 'N/A'),
-            'carbs': product_data.get('carbohydrates_100g', 'N/A'),
-            'fats': product_data.get('fat_100g', 'N/A')
-        }
-        return macronutrients
-    except KeyError:
-        return {"error": f"No se encontraron datos para {food_name}"}
+    return FOOD_MACROS.get(food_name.lower(), {
+        "proteins": "No disponible",
+        "carbs": "No disponible",
+        "fats": "No disponible",
+        "kcal": "No disponible"
+    })
 
 # Endpoint principal
 @app.post("/detect/")
