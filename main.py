@@ -4,8 +4,8 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image
 import io
-import requests
 from food_macros import FOOD_MACROS
+import os
 
 app = FastAPI()
 
@@ -14,21 +14,17 @@ app = FastAPI()
 # -------------------------
 @app.on_event("startup")
 async def startup_event():
-    print("✅ Aplicación FastAPI iniciando...")
+    global model
+    try:
+        print("🔁 Cargando modelo desde disco local...")
+        model = tf.saved_model.load("ssd_mobilenet_v2_saved_model")
+        print("✅ Modelo cargado correctamente desde local")
+    except Exception as e:
+        print("❌ Error al cargar modelo local:", e)
 
 @app.on_event("shutdown")
 async def shutdown_event():
     print("🛑 Aplicación FastAPI cerrada.")
-
-# -------------------------
-# Modelo de detección (cargado localmente)
-# -------------------------
-try:
-    model_path = "ssd_mobilenet_v2_saved_model"  # carpeta local
-    model = tf.saved_model.load(model_path)
-    print("✅ Modelo local cargado correctamente")
-except Exception as e:
-    print("❌ Error cargando el modelo local:", e)
 
 # -------------------------
 # Clases del modelo (COCO)
@@ -49,7 +45,7 @@ classes = {
 # -------------------------
 @app.get("/")
 def root():
-    return {"message": "FastAPI backend corriendo correctamente"}
+    return {"message": "FastAPI backend corriendo correctamente con modelo local"}
 
 # -------------------------
 # Funciones auxiliares
