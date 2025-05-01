@@ -1,0 +1,18 @@
+# Archivos temporales del sistema
+.DS_Store
+~$*
+
+# Archivos de backup o edición
+*.zip
+*.tmp
+
+# Otros archivos que no quieres rastrear
+temp_lixo.txt
+render.yaml.txt
+main_py.py
+
+
+
+
+
+
