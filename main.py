@@ -1,35 +1,60 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, Float, String, Date, func
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 import tensorflow as tf
-import tensorflow_hub as hub
 import numpy as np
 from PIL import Image
 import io
 import os
+from dotenv import load_dotenv
 from food_macros import FOOD_MACROS
-import datetime
+from sqlalchemy import create_engine, Column, Integer, String, Float, Date, Text
+from sqlalchemy.orm import sessionmaker, declarative_base
+from datetime import date
 
-# Configuración inicial
+# -------------------------
+# Cargar variables de entorno
+# -------------------------
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# -------------------------
+# Configurar SQLAlchemy
+# -------------------------
+Base = declarative_base()
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# -------------------------
+# Modelo de base de datos
+# -------------------------
+class DailyLog(Base):
+    __tablename__ = "daily_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_name = Column(String, nullable=False)
+    date = Column(Date, default=date.today)
+    food = Column(String, nullable=False)
+    proteins = Column(Float)
+    carbs = Column(Float)
+    fats = Column(Float)
+    kcal = Column(Float)
+
+Base.metadata.create_all(bind=engine)
+
+# -------------------------
+# Iniciar FastAPI
+# -------------------------
 app = FastAPI()
 
-# CORS (opcional)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.on_event("startup")
+async def startup_event():
+    global model
+    print("🔁 Cargando modelo desde disco local...")
+    model = tf.saved_model.load("./ssd_mobilenet_v2_saved_model")
+    print("✅ Modelo cargado correctamente desde local")
 
-# Cargar modelo desde disco local
-model = tf.saved_model.load("ssd_mobilenet_v2_saved_model")
-print("✅ Modelo cargado correctamente desde local")
-
-# Diccionario de clases del modelo
+# -------------------------
+# Clases del modelo (COCO)
+# -------------------------
 classes = {
     53: "apple",
     59: "pizza",
@@ -41,42 +66,9 @@ classes = {
     52: "banana",
 }
 
-# ------------------------------
-# Configuración de base de datos
-# ------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
-Base = declarative_base()
-SessionLocal = sessionmaker(bind=engine)
-
-# Modelo Usuario
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    age = Column(Integer)
-    gender = Column(String)
-    height = Column(Float)
-    weight = Column(Float)
-    activity_level = Column(String)
-
-# Modelo Consumo Diario
-class DailyRecord(Base):
-    __tablename__ = "daily_records"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer)
-    date = Column(Date, default=func.current_date())
-    food = Column(String)
-    proteins = Column(Float)
-    carbs = Column(Float)
-    fats = Column(Float)
-    kcal = Column(Float)
-
-Base.metadata.create_all(bind=engine)
-
-# ------------------------------
+# -------------------------
 # Funciones auxiliares
-# ------------------------------
+# -------------------------
 def read_imagefile(file) -> np.ndarray:
     image = Image.open(io.BytesIO(file)).convert("RGB")
     return np.array(image)
@@ -87,8 +79,7 @@ def detect_objects(image, model):
     detections = model(input_tensor)
     class_ids = detections['detection_classes'][0].numpy().astype(int)
     scores = detections['detection_scores'][0].numpy()
-    boxes = detections['detection_boxes'][0].numpy()
-    return class_ids, scores, boxes
+    return class_ids, scores
 
 def get_macronutrients(food_name):
     return FOOD_MACROS.get(food_name.lower(), {
@@ -98,39 +89,32 @@ def get_macronutrients(food_name):
         "kcal": 0
     })
 
-# ------------------------------
-# Endpoints
-# ------------------------------
+# -------------------------
+# Dependencia para sesión DB
+# -------------------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# -------------------------
+# Endpoint de prueba
+# -------------------------
 @app.get("/")
 def root():
-    return {"message": "🍎 API de detección de alimentos funcionando."}
+    return {"message": "FastAPI backend corriendo correctamente"}
 
-@app.post("/profile/")
-def save_user_profile(
-    name: str = Form(...),
-    age: int = Form(...),
-    gender: str = Form(...),
-    height: float = Form(...),
-    weight: float = Form(...),
-    activity_level: str = Form(...)
-):
-    db = SessionLocal()
-    existing = db.query(User).filter(User.name == name).first()
-    if existing:
-        return {"message": "Perfil ya existe."}
-    user = User(name=name, age=age, gender=gender, height=height, weight=weight, activity_level=activity_level)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return {"message": "Perfil guardado", "user_id": user.id}
-
+# -------------------------
+# Endpoint principal
+# -------------------------
 @app.post("/detect/")
-async def detect_food(file: UploadFile = File(...), user_id: int = Form(...)):
-    db = SessionLocal()
+async def detect_food(file: UploadFile = File(...), user_name: str = "anon", db: SessionLocal = Depends(get_db)):
     contents = await file.read()
     img = read_imagefile(contents)
 
-    class_ids, scores, _ = detect_objects(img, model)
+    class_ids, scores = detect_objects(img, model)
     threshold = 0.5
     detected_foods = []
 
@@ -138,24 +122,21 @@ async def detect_food(file: UploadFile = File(...), user_id: int = Form(...)):
         if score >= threshold:
             class_id = class_ids[idx]
             food_name = classes.get(class_id, "Unknown")
-            detected_foods.append(food_name)
+            if food_name != "Unknown":
+                macros = get_macronutrients(food_name)
+                log = DailyLog(
+                    user_name=user_name,
+                    food=food_name,
+                    proteins=macros["proteins"],
+                    carbs=macros["carbs"],
+                    fats=macros["fats"],
+                    kcal=macros["kcal"]
+                )
+                db.add(log)
+                db.commit()
+                detected_foods.append({"food": food_name, "macronutrients": macros})
 
     if not detected_foods:
         return JSONResponse(content={"message": "No se detectó ningún alimento conocido."})
 
-    results = []
-    for food in detected_foods:
-        macros = get_macronutrients(food)
-        record = DailyRecord(
-            user_id=user_id,
-            food=food,
-            proteins=macros['proteins'],
-            carbs=macros['carbs'],
-            fats=macros['fats'],
-            kcal=macros['kcal']
-        )
-        db.add(record)
-        db.commit()
-        results.append({"food": food, "macronutrients": macros})
-
-    return {"detections": results}
+    return JSONResponse(content={"detections": detected_foods})
