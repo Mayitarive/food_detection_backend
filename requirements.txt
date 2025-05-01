@@ -4,3 +4,4 @@ tensorflow
 tensorflow-hub
 pillow
 requests
+python-multipart
