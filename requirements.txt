@@ -7,3 +7,6 @@ tensorflow
 tensorflow-hub
 sqlalchemy
 psycopg2-binary
+asyncpg
+databases
+python-dotenv
