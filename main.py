@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
 import tensorflow as tf
-import tensorflow_hub as hub
 import numpy as np
 from PIL import Image
 import io
@@ -22,14 +21,14 @@ async def shutdown_event():
     print("🛑 Aplicación FastAPI cerrada.")
 
 # -------------------------
-# Modelo de detección
+# Modelo de detección (cargado localmente)
 # -------------------------
 try:
-    model_url = "https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2"
-    model = hub.load(model_url)
-    print("✅ Modelo cargado correctamente")
+    model_path = "ssd_mobilenet_v2_saved_model"  # carpeta local
+    model = tf.saved_model.load(model_path)
+    print("✅ Modelo local cargado correctamente")
 except Exception as e:
-    print("❌ Error cargando el modelo:", e)
+    print("❌ Error cargando el modelo local:", e)
 
 # -------------------------
 # Clases del modelo (COCO)
