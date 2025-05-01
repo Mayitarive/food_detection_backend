@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 services:
   - type: web
     name: food-detection-backend
@@ -6,6 +6,3 @@ services:
     buildCommand: ""
     startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
     plan: free
-=======
-
->>>>>>> 0696a69cbdd68be3986a1ad6f008c03c89a0d897
