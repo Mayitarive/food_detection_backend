@@ -1,34 +1,35 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import create_engine, Column, Integer, Float, String, Date, func
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 import tensorflow as tf
+import tensorflow_hub as hub
 import numpy as np
 from PIL import Image
 import io
-from food_macros import FOOD_MACROS
 import os
+from food_macros import FOOD_MACROS
+import datetime
 
+# Configuración inicial
 app = FastAPI()
 
-# -------------------------
-# Evento de inicio y apagado
-# -------------------------
-@app.on_event("startup")
-async def startup_event():
-    global model
-    try:
-        print("🔁 Cargando modelo desde disco local...")
-        model = tf.saved_model.load("ssd_mobilenet_v2_saved_model")
-        print("✅ Modelo cargado correctamente desde local")
-    except Exception as e:
-        print("❌ Error al cargar modelo local:", e)
+# CORS (opcional)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("🛑 Aplicación FastAPI cerrada.")
+# Cargar modelo desde disco local
+model = tf.saved_model.load("ssd_mobilenet_v2_saved_model")
+print("✅ Modelo cargado correctamente desde local")
 
-# -------------------------
-# Clases del modelo (COCO)
-# -------------------------
+# Diccionario de clases del modelo
 classes = {
     53: "apple",
     59: "pizza",
@@ -40,16 +41,42 @@ classes = {
     52: "banana",
 }
 
-# -------------------------
-# Endpoint de prueba
-# -------------------------
-@app.get("/")
-def root():
-    return {"message": "FastAPI backend corriendo correctamente con modelo local"}
+# ------------------------------
+# Configuración de base de datos
+# ------------------------------
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+Base = declarative_base()
+SessionLocal = sessionmaker(bind=engine)
 
-# -------------------------
+# Modelo Usuario
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    age = Column(Integer)
+    gender = Column(String)
+    height = Column(Float)
+    weight = Column(Float)
+    activity_level = Column(String)
+
+# Modelo Consumo Diario
+class DailyRecord(Base):
+    __tablename__ = "daily_records"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer)
+    date = Column(Date, default=func.current_date())
+    food = Column(String)
+    proteins = Column(Float)
+    carbs = Column(Float)
+    fats = Column(Float)
+    kcal = Column(Float)
+
+Base.metadata.create_all(bind=engine)
+
+# ------------------------------
 # Funciones auxiliares
-# -------------------------
+# ------------------------------
 def read_imagefile(file) -> np.ndarray:
     image = Image.open(io.BytesIO(file)).convert("RGB")
     return np.array(image)
@@ -65,45 +92,70 @@ def detect_objects(image, model):
 
 def get_macronutrients(food_name):
     return FOOD_MACROS.get(food_name.lower(), {
-        "proteins": "No disponible",
-        "carbs": "No disponible",
-        "fats": "No disponible",
-        "kcal": "No disponible"
+        "proteins": 0,
+        "carbs": 0,
+        "fats": 0,
+        "kcal": 0
     })
 
-# -------------------------
-# Endpoint principal de detección
-# -------------------------
+# ------------------------------
+# Endpoints
+# ------------------------------
+@app.get("/")
+def root():
+    return {"message": "🍎 API de detección de alimentos funcionando."}
+
+@app.post("/profile/")
+def save_user_profile(
+    name: str = Form(...),
+    age: int = Form(...),
+    gender: str = Form(...),
+    height: float = Form(...),
+    weight: float = Form(...),
+    activity_level: str = Form(...)
+):
+    db = SessionLocal()
+    existing = db.query(User).filter(User.name == name).first()
+    if existing:
+        return {"message": "Perfil ya existe."}
+    user = User(name=name, age=age, gender=gender, height=height, weight=weight, activity_level=activity_level)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"message": "Perfil guardado", "user_id": user.id}
+
 @app.post("/detect/")
-async def detect_food(file: UploadFile = File(...)):
-    try:
-        contents = await file.read()
-        img = read_imagefile(contents)
+async def detect_food(file: UploadFile = File(...), user_id: int = Form(...)):
+    db = SessionLocal()
+    contents = await file.read()
+    img = read_imagefile(contents)
 
-        class_ids, scores, _ = detect_objects(img, model)
-        threshold = 0.5
-        detected_foods = []
+    class_ids, scores, _ = detect_objects(img, model)
+    threshold = 0.5
+    detected_foods = []
 
-        for idx, score in enumerate(scores):
-            if score >= threshold:
-                class_id = class_ids[idx]
-                food_name = classes.get(class_id, "Unknown")
-                detected_foods.append(food_name)
+    for idx, score in enumerate(scores):
+        if score >= threshold:
+            class_id = class_ids[idx]
+            food_name = classes.get(class_id, "Unknown")
+            detected_foods.append(food_name)
 
-        if not detected_foods:
-            return JSONResponse(content={"message": "No se detectó ningún alimento conocido."})
+    if not detected_foods:
+        return JSONResponse(content={"message": "No se detectó ningún alimento conocido."})
 
-        results = []
-        for food in detected_foods:
-            macros = get_macronutrients(food)
-            results.append({
-                "food": food,
-                "macronutrients": macros
-            })
+    results = []
+    for food in detected_foods:
+        macros = get_macronutrients(food)
+        record = DailyRecord(
+            user_id=user_id,
+            food=food,
+            proteins=macros['proteins'],
+            carbs=macros['carbs'],
+            fats=macros['fats'],
+            kcal=macros['kcal']
+        )
+        db.add(record)
+        db.commit()
+        results.append({"food": food, "macronutrients": macros})
 
-        return JSONResponse(content={"detections": results})
-    
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-# Trigger redeployment
-
+    return {"detections": results}

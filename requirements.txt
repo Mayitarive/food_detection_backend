@@ -1,7 +1,9 @@
 fastapi
 uvicorn
-tensorflow
-tensorflow-hub
+python-multipart
 pillow
 requests
-python-multipart
+tensorflow
+tensorflow-hub
+sqlalchemy
+psycopg2-binary
