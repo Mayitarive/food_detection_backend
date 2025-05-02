@@ -1,39 +1,40 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from database import Base, engine, SessionLocal
+from models import DailyLog, UserProfile
+from routes.daily_log import router as daily_log_router
+from routes.profile import router as profile_router
+from utils.requirements import calculate_requirements
+from schemas.user_profile import (
+    UserProfileCreate,
+    UserProfileResponse,
+    NutritionalRequirements
+)
 import tensorflow as tf
 import numpy as np
 from PIL import Image
 import io
-import requests
 from food_macros import FOOD_MACROS
-from database import Base, engine
-from models import DailyLog
+
+# -------------------------
+# Crear instancia y tablas
+# -------------------------
 app = FastAPI()
-
 Base.metadata.create_all(bind=engine)
-# -------------------------
-# Evento de inicio y apagado
-# -------------------------
-@app.on_event("startup")
-async def startup_event():
-    print("✅ Aplicación FastAPI iniciando...")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("🛑 Aplicación FastAPI cerrada.")
 
 # -------------------------
-# Modelo de detección (cargado localmente)
+# Carga de modelo de detección
 # -------------------------
 try:
-    model_path = "ssd_mobilenet_v2_saved_model"  # carpeta local
+    model_path = "ssd_mobilenet_v2_saved_model"
     model = tf.saved_model.load(model_path)
     print("✅ Modelo local cargado correctamente")
 except Exception as e:
-    print("❌ Error cargando el modelo local:", e)
+    print("❌ Error cargando modelo:", e)
 
 # -------------------------
-# Clases del modelo (COCO)
+# Clases COCO relevantes
 # -------------------------
 classes = {
     53: "apple",
@@ -47,22 +48,14 @@ classes = {
 }
 
 # -------------------------
-# Endpoint de prueba
-# -------------------------
-@app.get("/")
-def root():
-    return {"message": "FastAPI backend corriendo correctamente"}
-
-# -------------------------
-# Funciones auxiliares
+# Utilidades
 # -------------------------
 def read_imagefile(file) -> np.ndarray:
     image = Image.open(io.BytesIO(file)).convert("RGB")
     return np.array(image)
 
 def detect_objects(image, model):
-    input_tensor = tf.convert_to_tensor(image)
-    input_tensor = input_tensor[tf.newaxis, ...]
+    input_tensor = tf.convert_to_tensor(image)[tf.newaxis, ...]
     detections = model(input_tensor)
     class_ids = detections['detection_classes'][0].numpy().astype(int)
     scores = detections['detection_scores'][0].numpy()
@@ -77,15 +70,25 @@ def get_macronutrients(food_name):
         "kcal": "No disponible"
     })
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # -------------------------
-# Endpoint principal de detección
+# Endpoints
 # -------------------------
+@app.get("/")
+def root():
+    return {"message": "FastAPI backend corriendo correctamente"}
+
 @app.post("/detect/")
 async def detect_food(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         img = read_imagefile(contents)
-
         class_ids, scores, _ = detect_objects(img, model)
         threshold = 0.5
         detected_foods = []
@@ -112,31 +115,10 @@ async def detect_food(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
-from fastapi import FastAPI, Depends
-from sqlalchemy.orm import Session
-from database import SessionLocal
-from models.user_profile import UserProfile
-from schemas.user_profile import (
-    UserProfileCreate,
-    UserProfileResponse,
-    NutritionalRequirements
-)
-from utils.requirements import calculate_requirements
-
-app = FastAPI()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @app.post("/profile/", response_model=UserProfileResponse)
 def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
-    
+
     if db_profile:
         for key, value in profile.dict().items():
             setattr(db_profile, key, value)
@@ -159,22 +141,15 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         id=db_profile.id,
         name=db_profile.name,
         age=db_profile.age,
-        gender=db_profile.gender,
-        weight=db_profile.weight,
-        height=db_profile.height,
-        activity_level=db_profile.activity_level,
+        gender=profile.gender,
+        weight=profile.weight,
+        height=profile.height,
+        activity_level=profile.activity_level,
         requirements=NutritionalRequirements(**requirements)
     )
 
-
-from fastapi import FastAPI
-from routes.profile import router as profile_router
-from routes.daily_log import router as daily_log_router
-
-app = FastAPI()
-
-app.include_router(profile_router)
+# -------------------------
+# Rutas externas
+# -------------------------
 app.include_router(daily_log_router)
-
-
-
+app.include_router(profile_router)
