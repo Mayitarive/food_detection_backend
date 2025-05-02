@@ -6,12 +6,11 @@ from PIL import Image
 import io
 import requests
 from food_macros import FOOD_MACROS
-from routes import daily_log
-
+from database import Base, engine
+from models import DailyLog
 app = FastAPI()
 
-app.include_router(daily_log.router)
-
+Base.metadata.create_all(bind=engine)
 # -------------------------
 # Evento de inicio y apagado
 # -------------------------
@@ -166,4 +165,16 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         activity_level=db_profile.activity_level,
         requirements=NutritionalRequirements(**requirements)
     )
+
+
+from fastapi import FastAPI
+from routes.profile import router as profile_router
+from routes.daily_log import router as daily_log_router
+
+app = FastAPI()
+
+app.include_router(profile_router)
+app.include_router(daily_log_router)
+
+
 
