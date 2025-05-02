@@ -6,8 +6,11 @@ from PIL import Image
 import io
 import requests
 from food_macros import FOOD_MACROS
+from routes import daily_log
 
 app = FastAPI()
+
+app.include_router(daily_log.router)
 
 # -------------------------
 # Evento de inicio y apagado
