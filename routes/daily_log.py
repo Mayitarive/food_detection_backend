@@ -43,3 +43,14 @@ def get_daily_log(user: str = Query(...), db: Session = Depends(get_db)):
         "date": today,
         "meals": meals
     }
+
+@router.delete("/daily-log/reset")
+def reset_daily_logs(db: Session = Depends(get_db)):
+    try:
+        db.execute("DROP TABLE IF EXISTS daily_logs CASCADE;")
+        db.commit()
+        return {"message": "Tabla 'daily_logs' eliminada correctamente."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
