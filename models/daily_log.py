@@ -7,6 +7,7 @@ class DailyLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user = Column(String, index=True)
+
     date = Column(Date, default=func.current_date())
     food_name = Column(String)
     calories = Column(Float)
