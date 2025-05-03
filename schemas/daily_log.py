@@ -14,3 +14,11 @@ class DailyLogResponse(BaseModel):
     user: str
     date: date
     meals: List[DailyFoodItem]
+
+class DailyLogCreate(BaseModel):
+    user: str
+    food_name: str
+    calories: float
+    protein: float
+    carbs: float
+    fat: float

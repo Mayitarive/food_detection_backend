@@ -19,10 +19,12 @@ def get_db():
 class DailyLogRequest(BaseModel):
     user: str
     food_name: str
-    calories: int
-    protein: int
-    carbs: int
-    fat: int
+    calories: float
+    protein: float
+    carbs: float
+    fat: float
+
+
 
 class DailyLogResponse(BaseModel):
     user: str
