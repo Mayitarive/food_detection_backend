@@ -27,6 +27,7 @@ def get_daily_log(user: str = Query(...), db: Session = Depends(get_db)):
 
     logs = db.query(DailyLog).filter(DailyLog.user == user, DailyLog.date == today).all()
 
+
     meals = [
         {
             "name": log.food_name,
