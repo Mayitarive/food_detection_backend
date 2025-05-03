@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from database import get_db
+from dependencies import get_db
 from models.user_profile import UserProfile
 from schemas.user_profile import UserProfileCreate, UserProfileResponse, NutritionalRequirements
 from utils.requirements import calculate_requirements
