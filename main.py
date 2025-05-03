@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image
 import io
 from food_macros import FOOD_MACROS
+from routes.recommendations import router as recommendations_router
 
 app = FastAPI()
 
@@ -144,3 +145,4 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
 
 app.include_router(daily_log_router)
 app.include_router(profile_router)
+app.include_router(recommendations_router)
