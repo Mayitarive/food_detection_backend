@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware  # ✅ Importa CORS middleware
 from sqlalchemy.orm import Session
 from database import Base, engine
 from dependencies import get_db
@@ -19,6 +20,16 @@ import io
 from food_macros import FOOD_MACROS
 
 app = FastAPI()
+
+# ✅ Habilitar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Puedes usar "*" para permitir todo
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 Base.metadata.create_all(bind=engine)
 
 # -------------------------
