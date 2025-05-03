@@ -25,7 +25,8 @@ class DailyLogResponse(BaseModel):
 def get_daily_log(user: str = Query(...), db: Session = Depends(get_db)):
     today = date.today().isoformat()
 
-    logs = db.query(DailyLog).filter(DailyLog.user_name == user, DailyLog.date == today).all()
+    logs = db.query(DailyLog).filter(DailyLog.user == user, DailyLog.date == today).all()
+
 
 
 
