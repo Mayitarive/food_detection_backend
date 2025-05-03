@@ -1,7 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from database import Base, engine, SessionLocal
+from database import Base, engine
+from dependencies import get_db
 from models import DailyLog, UserProfile
 from routes.daily_log import router as daily_log_router
 from routes.profile import router as profile_router
@@ -17,14 +18,11 @@ from PIL import Image
 import io
 from food_macros import FOOD_MACROS
 
-# -------------------------
-# Crear instancia y tablas
-# -------------------------
 app = FastAPI()
 Base.metadata.create_all(bind=engine)
 
 # -------------------------
-# Carga de modelo de detección
+# Cargar modelo
 # -------------------------
 try:
     model_path = "ssd_mobilenet_v2_saved_model"
@@ -33,9 +31,6 @@ try:
 except Exception as e:
     print("❌ Error cargando modelo:", e)
 
-# -------------------------
-# Clases COCO relevantes
-# -------------------------
 classes = {
     53: "apple",
     59: "pizza",
@@ -47,9 +42,6 @@ classes = {
     52: "banana",
 }
 
-# -------------------------
-# Utilidades
-# -------------------------
 def read_imagefile(file) -> np.ndarray:
     image = Image.open(io.BytesIO(file)).convert("RGB")
     return np.array(image)
@@ -70,16 +62,6 @@ def get_macronutrients(food_name):
         "kcal": "No disponible"
     })
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# -------------------------
-# Endpoints
-# -------------------------
 @app.get("/")
 def root():
     return {"message": "FastAPI backend corriendo correctamente"}
@@ -148,8 +130,5 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         requirements=NutritionalRequirements(**requirements)
     )
 
-# -------------------------
-# Rutas externas
-# -------------------------
 app.include_router(daily_log_router)
 app.include_router(profile_router)
