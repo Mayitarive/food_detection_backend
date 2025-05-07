@@ -1,12 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware  # ✅ Importa CORS middleware
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import Base, engine
 from dependencies import get_db
 from models import DailyLog, UserProfile
 from routes.daily_log import router as daily_log_router
 from routes.profile import router as profile_router
+from routes.recommendations import router as recommendations_router
 from utils.requirements import calculate_requirements
 from schemas.user_profile import (
     UserProfileCreate,
@@ -18,25 +19,22 @@ import numpy as np
 from PIL import Image
 import io
 from food_macros import FOOD_MACROS
-from routes.recommendations import router as recommendations_router
 
 app = FastAPI()
 
 # ✅ Habilitar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # "http://localhost:5173" Puedes usar "*" para permitir todo
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
+# ✅ Crear tablas en la base de datos
 Base.metadata.create_all(bind=engine)
 
-# -------------------------
-# Cargar modelo
-# -------------------------
+# ✅ Cargar modelo de detección
 try:
     model_path = "ssd_mobilenet_v2_saved_model"
     model = tf.saved_model.load(model_path)
@@ -44,6 +42,7 @@ try:
 except Exception as e:
     print("❌ Error cargando modelo:", e)
 
+# ✅ Mapeo de clases detectables
 classes = {
     53: "apple",
     59: "pizza",
@@ -55,6 +54,7 @@ classes = {
     52: "banana",
 }
 
+# ✅ Funciones auxiliares
 def read_imagefile(file) -> np.ndarray:
     image = Image.open(io.BytesIO(file)).convert("RGB")
     return np.array(image)
@@ -75,6 +75,7 @@ def get_macronutrients(food_name):
         "kcal": "No disponible"
     })
 
+# ✅ Rutas
 @app.get("/")
 def root():
     return {"message": "FastAPI backend corriendo correctamente"}
@@ -110,20 +111,12 @@ async def detect_food(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+# ✅ Endpoint corregido para guardar perfil con requerimientos
 @app.post("/profile/", response_model=UserProfileResponse)
 def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
 
-    if db_profile:
-        for key, value in profile.dict().items():
-            setattr(db_profile, key, value)
-    else:
-        db_profile = UserProfile(**profile.dict())
-        db.add(db_profile)
-    
-    db.commit()
-    db.refresh(db_profile)
-
+    # Calcular requerimientos nutricionales
     requirements = calculate_requirements(
         age=profile.age,
         gender=profile.gender,
@@ -132,17 +125,38 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         activity_level=profile.activity_level
     )
 
+    if db_profile:
+        for key, value in profile.dict().items():
+            setattr(db_profile, key, value)
+        db_profile.required_calories = requirements["calories"]
+        db_profile.required_protein = requirements["protein"]
+        db_profile.required_fat = requirements["fat"]
+        db_profile.required_carbs = requirements["carbs"]
+    else:
+        db_profile = UserProfile(
+            **profile.dict(),
+            required_calories=requirements["calories"],
+            required_protein=requirements["protein"],
+            required_fat=requirements["fat"],
+            required_carbs=requirements["carbs"]
+        )
+        db.add(db_profile)
+
+    db.commit()
+    db.refresh(db_profile)
+
     return UserProfileResponse(
         id=db_profile.id,
         name=db_profile.name,
         age=db_profile.age,
-        gender=profile.gender,
-        weight=profile.weight,
-        height=profile.height,
-        activity_level=profile.activity_level,
+        gender=db_profile.gender,
+        weight=db_profile.weight,
+        height=db_profile.height,
+        activity_level=db_profile.activity_level,
         requirements=NutritionalRequirements(**requirements)
     )
 
+# ✅ Incluir rutas externas
 app.include_router(daily_log_router)
 app.include_router(profile_router)
 app.include_router(recommendations_router)
