@@ -13,3 +13,9 @@ class UserProfile(Base):
     activity_level = Column(
         Enum("sedentary", "active", "very_active", name="activity_levels")
     )
+
+    # ✅ Nuevos campos para guardar requerimientos nutricionales
+    required_calories = Column(Integer)
+    required_protein = Column(Integer)
+    required_carbs = Column(Integer)
+    required_fat = Column(Integer)
