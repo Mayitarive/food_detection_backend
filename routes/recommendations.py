@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import date
+import random
 
 from database import SessionLocal
 from models import UserProfile, DailyLog
@@ -39,6 +40,22 @@ BOLIVIAN_FOODS = [
     {
         "name": "Arroz con Queso", "calories": 190, "protein": 6, "carbs": 25, "fat": 7,
         "description": "Plato equilibrado con buen aporte de macronutrientes"
+    },
+    {
+        "name": "Locro", "calories": 250, "protein": 12, "carbs": 28, "fat": 10,
+        "description": "Sopa espesa tradicional con carne y maíz"
+    },
+    {
+        "name": "Falso Conejo", "calories": 300, "protein": 18, "carbs": 30, "fat": 12,
+        "description": "Plato típico con carne apanada y arroz"
+    },
+    {
+        "name": "Majadito", "calories": 220, "protein": 10, "carbs": 35, "fat": 6,
+        "description": "Arroz con charque típico del oriente boliviano"
+    },
+    {
+        "name": "Sopa de Maní", "calories": 280, "protein": 9, "carbs": 15, "fat": 20,
+        "description": "Sopa tradicional hecha con maní y carne"
     }
 ]
 
@@ -93,5 +110,7 @@ def get_recommendations(user: str = Query(...), db: Session = Depends(get_db)):
                 "score": score
             })
 
-    top = sorted(scored, key=lambda x: x["score"], reverse=True)[:3]
+    top_six = sorted(scored, key=lambda x: x["score"], reverse=True)[:6]
+    top = random.sample(top_six, min(3, len(top_six)))
+
     return {"user": user, "recommendations": top}
