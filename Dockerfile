@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 10000
 
 # ✅ Comando para iniciar FastAPI
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
