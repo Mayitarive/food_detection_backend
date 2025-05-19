@@ -3,3 +3,4 @@ services:
     name: food-detection-backend
     env: docker
     plan: free
+    dockerfilePath: ./Dockerfile
