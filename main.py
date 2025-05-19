@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import Base, engine
@@ -14,15 +14,17 @@ from schemas.user_profile import (
     UserProfileResponse,
     NutritionalRequirements
 )
-import tensorflow as tf
+
 import numpy as np
-from PIL import Image
-import io
+import shutil
+import uuid
+from pathlib import Path
+from ultralytics import YOLO
 from food_macros import FOOD_MACROS
 
 app = FastAPI()
 
-# ✅ Habilitar CORS
+# ✅ CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,92 +33,67 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Crear tablas en la base de datos
+# ✅ Base de datos
 Base.metadata.create_all(bind=engine)
 
-# ✅ Cargar modelo de detección
-try:
-    model_path = "ssd_mobilenet_v2_saved_model"
-    model = tf.saved_model.load(model_path)
-    print("✅ Modelo local cargado correctamente")
-except Exception as e:
-    print("❌ Error cargando modelo:", e)
+# ✅ Cargar modelo YOLOv8
+model_path = "yolo_model/best.pt"
+model = YOLO(model_path)
+print("✅ Modelo YOLOv8 cargado")
 
-# ✅ Mapeo de clases detectables
-classes = {
-    53: "apple",
-    59: "pizza",
-    61: "cake",
-    58: "hot dog",
-    60: "donut",
-    54: "sandwich",
-    56: "broccoli",
-    52: "banana",
-}
-
-# ✅ Funciones auxiliares
-def read_imagefile(file) -> np.ndarray:
-    image = Image.open(io.BytesIO(file)).convert("RGB")
-    return np.array(image)
-
-def detect_objects(image, model):
-    input_tensor = tf.convert_to_tensor(image)[tf.newaxis, ...]
-    detections = model(input_tensor)
-    class_ids = detections['detection_classes'][0].numpy().astype(int)
-    scores = detections['detection_scores'][0].numpy()
-    boxes = detections['detection_boxes'][0].numpy()
-    return class_ids, scores, boxes
-
-def get_macronutrients(food_name):
-    return FOOD_MACROS.get(food_name.lower(), {
-        "proteins": "No disponible",
-        "carbs": "No disponible",
-        "fats": "No disponible",
-        "kcal": "No disponible"
-    })
-
-# ✅ Rutas
-@app.get("/")
-def root():
-    return {"message": "FastAPI backend corriendo correctamente"}
-
+# ✅ Detectar alimentos y guardar imagen con bounding boxes
 @app.post("/detect/")
 async def detect_food(file: UploadFile = File(...)):
     try:
-        contents = await file.read()
-        img = read_imagefile(contents)
-        class_ids, scores, _ = detect_objects(img, model)
-        threshold = 0.5
-        detected_foods = []
+        # Guardar archivo temporal
+        image_id = str(uuid.uuid4())
+        input_path = f"static/{image_id}.jpg"
+        output_path = f"static/{image_id}_pred.jpg"
+        with open(input_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
 
-        for idx, score in enumerate(scores):
-            if score >= threshold:
-                class_id = class_ids[idx]
-                food_name = classes.get(class_id, "Unknown")
-                detected_foods.append(food_name)
+        # Ejecutar inferencia
+        results = model(input_path)
+        results[0].save(filename=output_path)  # guardar imagen con bounding boxes
 
-        if not detected_foods:
-            return JSONResponse(content={"message": "No se detectó ningún alimento conocido."})
+        # Obtener etiquetas detectadas
+        names = model.names
+        detected = set([names[int(cls)] for cls in results[0].boxes.cls.cpu().numpy()])
 
-        results = []
-        for food in detected_foods:
-            macros = get_macronutrients(food)
-            results.append({
+        detections = []
+        for food in detected:
+            macros = FOOD_MACROS.get(food.lower(), {
+                "proteins": "No disponible",
+                "carbs": "No disponible",
+                "fats": "No disponible",
+                "kcal": "No disponible"
+            })
+            detections.append({
                 "food": food,
                 "macronutrients": macros
             })
 
-        return JSONResponse(content={"detections": results})
-    
+        return JSONResponse(content={
+            "image_path": output_path,
+            "detections": detections
+        })
+
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# ✅ Endpoint corregido para guardar perfil con requerimientos
+# ✅ Mostrar imagen con bounding boxes
+@app.get("/image/{filename}")
+async def get_image(filename: str):
+    path = Path("static") / filename
+    if path.exists():
+        return FileResponse(path)
+    return JSONResponse(status_code=404, content={"error": "Imagen no encontrada"})
+
+# ✅ Crear perfil con requerimientos
 @app.post("/profile/", response_model=UserProfileResponse)
 def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
 
-    # Calcular requerimientos nutricionales
     requirements = calculate_requirements(
         age=profile.age,
         gender=profile.gender,
@@ -156,7 +133,11 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         requirements=NutritionalRequirements(**requirements)
     )
 
-# ✅ Incluir rutas externas
+# ✅ Incluir rutas adicionales
 app.include_router(daily_log_router)
 app.include_router(profile_router)
 app.include_router(recommendations_router)
+
+@app.get("/")
+def root():
+    return {"message": "✅ FastAPI + YOLO backend funcionando correctamente"}
