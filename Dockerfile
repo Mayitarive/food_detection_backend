@@ -13,14 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ✅ Copiar todo el código del proyecto
 COPY . .
 
-# ✅ Exponer puerto
+# ✅ Exponer puerto (opcional porque Railway usa el puerto que tú definas)
 EXPOSE 10000
 
-# ✅ Comando para iniciar FastAPI
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
-
-# Exponer puerto usado por uvicorn
-EXPOSE 10000
-
-# Iniciar servidor uvicorn usando la variable de entorno PORT (de Railway)
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+# ✅ Iniciar FastAPI con el puerto de Railway o por defecto 10000
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
