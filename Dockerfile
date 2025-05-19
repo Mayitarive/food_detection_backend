@@ -10,7 +10,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Exponer puerto
 EXPOSE 10000
 
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"
+# Usar 10000 si Railway no define PORT
+ENV PORT=10000
 
+# Usar ENTRYPOINT con exec explícito (mejor que CMD para Railway)
+ENTRYPOINT ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port $PORT"]
