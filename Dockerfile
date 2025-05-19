@@ -18,3 +18,9 @@ EXPOSE 10000
 
 # ✅ Comando para iniciar FastAPI
 CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+
+# Exponer puerto usado por uvicorn
+EXPOSE 10000
+
+# Iniciar servidor uvicorn usando la variable de entorno PORT (de Railway)
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
