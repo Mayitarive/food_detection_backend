@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Depends
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 from sqlalchemy.orm import Session
 from database import Base, engine
 from dependencies import get_db
@@ -23,6 +25,14 @@ from ultralytics import YOLO
 from food_macros import FOOD_MACROS
 
 app = FastAPI()
+
+
+# Servir archivos estáticos
+if not os.path.exists("static"):
+    os.makedirs("static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
 
 # ✅ CORS
 app.add_middleware(
