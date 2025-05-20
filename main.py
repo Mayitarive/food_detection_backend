@@ -103,48 +103,53 @@ async def get_image(filename: str):
 # ✅ Crear o actualizar perfil de usuario
 @app.post("/profile/", response_model=UserProfileResponse)
 def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
-    db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
+    try:
+        db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
 
-    # 🔁 Usar el nuevo campo goal
-    requirements = calculate_requirements(
-        age=profile.age,
-        gender=profile.gender,
-        weight=profile.weight,
-        height=profile.height,
-        activity_level=profile.activity_level,
-        goal=profile.goal  # NUEVO CAMPO
-    )
-
-    if db_profile:
-        for key, value in profile.dict().items():
-            setattr(db_profile, key, value)
-        db_profile.required_calories = requirements["calories"]
-        db_profile.required_protein = requirements["protein"]
-        db_profile.required_fat = requirements["fat"]
-        db_profile.required_carbs = requirements["carbs"]
-    else:
-        db_profile = UserProfile(
-            **profile.dict(),
-            required_calories=requirements["calories"],
-            required_protein=requirements["protein"],
-            required_fat=requirements["fat"],
-            required_carbs=requirements["carbs"]
+        # 🔁 Usar el nuevo campo goal
+        requirements = calculate_requirements(
+            age=profile.age,
+            gender=profile.gender,
+            weight=profile.weight,
+            height=profile.height,
+            activity_level=profile.activity_level,
+            goal=profile.goal  # <--- nuevo campo
         )
-        db.add(db_profile)
 
-    db.commit()
-    db.refresh(db_profile)
+        if db_profile:
+            for key, value in profile.dict().items():
+                setattr(db_profile, key, value)
+            db_profile.required_calories = requirements["calories"]
+            db_profile.required_protein = requirements["protein"]
+            db_profile.required_fat = requirements["fat"]
+            db_profile.required_carbs = requirements["carbs"]
+        else:
+            db_profile = UserProfile(
+                **profile.dict(),
+                required_calories=requirements["calories"],
+                required_protein=requirements["protein"],
+                required_fat=requirements["fat"],
+                required_carbs=requirements["carbs"]
+            )
+            db.add(db_profile)
 
-    return UserProfileResponse(
-        id=db_profile.id,
-        name=db_profile.name,
-        age=db_profile.age,
-        gender=profile.gender,
-        weight=profile.weight,
-        height=profile.height,
-        activity_level=profile.activity_level,
-        requirements=NutritionalRequirements(**requirements)
-    )
+        db.commit()
+        db.refresh(db_profile)
+
+        return UserProfileResponse(
+            id=db_profile.id,
+            name=db_profile.name,
+            age=db_profile.age,
+            gender=profile.gender,
+            weight=profile.weight,
+            height=profile.height,
+            activity_level=profile.activity_level,
+            requirements=NutritionalRequirements(**requirements)
+        )
+    
+    except Exception as e:
+        print("❌ Error en /profile/:", e)
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ✅ Rutas adicionales
 app.include_router(daily_log_router)
