@@ -26,15 +26,12 @@ from food_macros import FOOD_MACROS
 
 app = FastAPI()
 
-
-# Servir archivos estáticos
+# ✅ Servir archivos estáticos
 if not os.path.exists("static"):
     os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-
-# ✅ CORS
+# ✅ Configurar CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Base de datos
+# ✅ Inicializar la base de datos
 Base.metadata.create_all(bind=engine)
 
 # ✅ Cargar modelo YOLOv8
@@ -51,28 +48,29 @@ model_path = "yolo_model/best.pt"
 model = YOLO(model_path)
 print("✅ Modelo YOLOv8 cargado")
 
-# ✅ Detectar alimentos y guardar imagen con bounding boxes
+# ✅ Endpoint para detección de alimentos con bounding boxes
 @app.post("/detect/")
 async def detect_food(file: UploadFile = File(...)):
     try:
-        # Guardar archivo temporal
+        # Guardar la imagen temporalmente
         image_id = str(uuid.uuid4())
         input_path = f"static/{image_id}.jpg"
         output_path = f"static/{image_id}_pred.jpg"
         with open(input_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        # Ejecutar inferencia
+        # Ejecutar detección
         results = model(input_path)
-        results[0].save(filename=output_path)  # guardar imagen con bounding boxes
+        results[0].save(filename=output_path)
 
-        # Obtener etiquetas detectadas
+        # Extraer nombres detectados
         names = model.names
         detected = set([names[int(cls)] for cls in results[0].boxes.cls.cpu().numpy()])
 
         detections = []
         for food in detected:
             macros = FOOD_MACROS.get(food.lower(), {
+                "unit": "unidad",
                 "proteins": "No disponible",
                 "carbs": "No disponible",
                 "fats": "No disponible",
@@ -80,7 +78,13 @@ async def detect_food(file: UploadFile = File(...)):
             })
             detections.append({
                 "food": food,
-                "macronutrients": macros
+                "unit": macros["unit"],
+                "macronutrients": {
+                    "proteins": macros["proteins"],
+                    "carbs": macros["carbs"],
+                    "fats": macros["fats"],
+                    "kcal": macros["kcal"]
+                }
             })
 
         return JSONResponse(content={
@@ -91,7 +95,7 @@ async def detect_food(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# ✅ Mostrar imagen con bounding boxes
+# ✅ Endpoint para servir imagen procesada
 @app.get("/image/{filename}")
 async def get_image(filename: str):
     path = Path("static") / filename
@@ -99,7 +103,7 @@ async def get_image(filename: str):
         return FileResponse(path)
     return JSONResponse(status_code=404, content={"error": "Imagen no encontrada"})
 
-# ✅ Crear perfil con requerimientos
+# ✅ Crear o actualizar perfil de usuario
 @app.post("/profile/", response_model=UserProfileResponse)
 def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
@@ -143,7 +147,7 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         requirements=NutritionalRequirements(**requirements)
     )
 
-# ✅ Incluir rutas adicionales
+# ✅ Rutas adicionales (registro diario, recomendaciones, etc.)
 app.include_router(daily_log_router)
 app.include_router(profile_router)
 app.include_router(recommendations_router)
