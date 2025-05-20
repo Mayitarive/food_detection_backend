@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
-# Enums para sexo y nivel de actividad
+# Enums para sexo, nivel de actividad y objetivo
 class GenderType(str, Enum):
     male = "male"
     female = "female"
@@ -11,6 +11,11 @@ class ActivityLevel(str, Enum):
     active = "active"
     very_active = "very_active"
 
+class GoalType(str, Enum):
+    mantener = "mantener"
+    subir = "subir"
+    bajar = "bajar"
+
 # Esquema de entrada (crear perfil)
 class UserProfileCreate(BaseModel):
     name: str
@@ -19,6 +24,7 @@ class UserProfileCreate(BaseModel):
     weight: float = Field(..., ge=20, le=300)
     height: float = Field(..., ge=50, le=250)
     activity_level: ActivityLevel = Field(..., alias="activity")
+    goal: GoalType = Field(..., alias="goal")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -38,6 +44,7 @@ class UserProfileResponse(BaseModel):
     weight: float
     height: float
     activity_level: ActivityLevel
+    goal: GoalType
     requirements: NutritionalRequirements
 
     class Config:

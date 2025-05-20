@@ -52,18 +52,15 @@ print("✅ Modelo YOLOv8 cargado")
 @app.post("/detect/")
 async def detect_food(file: UploadFile = File(...)):
     try:
-        # Guardar la imagen temporalmente
         image_id = str(uuid.uuid4())
         input_path = f"static/{image_id}.jpg"
         output_path = f"static/{image_id}_pred.jpg"
         with open(input_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        # Ejecutar detección
         results = model(input_path)
         results[0].save(filename=output_path)
 
-        # Extraer nombres detectados
         names = model.names
         detected = set([names[int(cls)] for cls in results[0].boxes.cls.cpu().numpy()])
 
@@ -108,12 +105,14 @@ async def get_image(filename: str):
 def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
 
+    # 🔁 Usar el nuevo campo goal
     requirements = calculate_requirements(
         age=profile.age,
         gender=profile.gender,
         weight=profile.weight,
         height=profile.height,
-        activity_level=profile.activity_level
+        activity_level=profile.activity_level,
+        goal=profile.goal  # NUEVO CAMPO
     )
 
     if db_profile:
@@ -140,14 +139,14 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         id=db_profile.id,
         name=db_profile.name,
         age=db_profile.age,
-        gender=db_profile.gender,
-        weight=db_profile.weight,
-        height=db_profile.height,
-        activity_level=db_profile.activity_level,
+        gender=profile.gender,
+        weight=profile.weight,
+        height=profile.height,
+        activity_level=profile.activity_level,
         requirements=NutritionalRequirements(**requirements)
     )
 
-# ✅ Rutas adicionales (registro diario, recomendaciones, etc.)
+# ✅ Rutas adicionales
 app.include_router(daily_log_router)
 app.include_router(profile_router)
 app.include_router(recommendations_router)
