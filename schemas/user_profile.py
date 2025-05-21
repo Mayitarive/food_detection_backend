@@ -10,7 +10,7 @@ class ActivityLevel(str, Enum):
     sedentary = "sedentary"
     active = "active"
     very_active = "very_active"
-
+#incluir goal
 class GoalType(str, Enum):
     mantener = "mantener"
     subir = "subir"
