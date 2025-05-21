@@ -17,7 +17,6 @@ from schemas.user_profile import (
     NutritionalRequirements
 )
 
-import numpy as np
 import shutil
 import uuid
 from pathlib import Path
@@ -106,14 +105,13 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
     try:
         db_profile = db.query(UserProfile).filter(UserProfile.name == profile.name).first()
 
-        # 🔁 Usar el nuevo campo goal
         requirements = calculate_requirements(
             age=profile.age,
             gender=profile.gender,
             weight=profile.weight,
             height=profile.height,
             activity_level=profile.activity_level,
-            goal=profile.goal  # <--- nuevo campo
+            goal=profile.goal
         )
 
         if db_profile:
@@ -140,13 +138,14 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
             id=db_profile.id,
             name=db_profile.name,
             age=db_profile.age,
-            gender=profile.gender,
-            weight=profile.weight,
-            height=profile.height,
-            activity_level=profile.activity_level,
+            gender=db_profile.gender,
+            weight=db_profile.weight,
+            height=db_profile.height,
+            activity_level=db_profile.activity_level,
+            goal=db_profile.goal,  # ✅ AGREGADO AQUÍ
             requirements=NutritionalRequirements(**requirements)
         )
-    
+
     except Exception as e:
         print("❌ Error en /profile/:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
