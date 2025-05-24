@@ -23,13 +23,7 @@ from pathlib import Path
 from ultralytics import YOLO
 from food_macros import FOOD_MACROS
 
-# ✅ IMPORTANTE: Añadir ProxyHeadersMiddleware para detectar correctamente HTTPS detrás de proxy (Railway)
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
-
 app = FastAPI()
-
-# ✅ Middleware para respetar X-Forwarded-Proto y evitar redirect http -> https
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # ✅ Servir archivos estáticos
 if not os.path.exists("static"):
