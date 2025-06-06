@@ -150,6 +150,27 @@ def create_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
         print("❌ Error en /profile/:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+@app.get("/user-history")
+def get_user_full_history(user: str = Query(...), db: Session = Depends(get_db)):
+    try:
+        history = db.query(DailyLog).filter(DailyLog.user == user).order_by(DailyLog.date.desc(), DailyLog.timestamp.desc()).all()
+        return [
+            {
+                "id": log.id,
+                "food_name": log.food_name,
+                "calories": log.calories,
+                "protein": log.protein,
+                "carbs": log.carbs,
+                "fat": log.fat,
+                "portions": getattr(log, "portions", None),
+                "created_at": log.timestamp.isoformat()
+            }
+            for log in history
+        ]
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
 # ✅ Rutas adicionales
 app.include_router(daily_log_router)
 app.include_router(profile_router)
