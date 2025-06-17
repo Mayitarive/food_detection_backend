@@ -56,6 +56,38 @@ BOLIVIAN_FOODS = [
     {
         "name": "Sopa de Maní", "calories": 280, "protein": 9, "carbs": 15, "fat": 20,
         "description": "Sopa tradicional hecha con maní y carne"
+    },
+    {
+        "name": "Huevo", "calories": 155, "protein": 13, "carbs": 1.1, "fat": 11,
+        "description": "Fuente excelente de proteína de alta calidad y grasas saludables"
+    },
+    {
+        "name": "Palta", "calories": 160, "protein": 2, "carbs": 8.5, "fat": 14.7,
+        "description": "Fruta rica en grasas saludables y fibra"
+    },
+    {
+        "name": "Tunta", "calories": 140, "protein": 2.0, "carbs": 32, "fat": 0.2,
+        "description": "Papa blanca deshidratada típica de los Andes, rica en carbohidratos"
+    },
+    {
+        "name": "Pepino", "calories": 15, "protein": 0.7, "carbs": 3.6, "fat": 0.1,
+        "description": "Vegetal fresco, bajo en calorías, rico en agua y fibra"
+    },
+    {
+        "name": "Plátano", "calories": 89, "protein": 1.1, "carbs": 23, "fat": 0.3,
+        "description": "Fruta rica en carbohidratos y potasio, ideal para energía rápida"
+    },
+    {
+        "name": "Manzana", "calories": 52, "protein": 0.3, "carbs": 14, "fat": 0.2,
+        "description": "Fruta refrescante, rica en fibra y baja en calorías"
+    },
+    {
+        "name": "Frutillas", "calories": 32, "protein": 0.7, "carbs": 7.7, "fat": 0.3,
+        "description": "Fruta rica en antioxidantes, vitamina C y fibra"
+    },
+    {
+        "name": "Naranja", "calories": 47, "protein": 0.9, "carbs": 12, "fat": 0.1,
+        "description": "Fruta cítrica rica en vitamina C y carbohidratos simples"
     }
 ]
 
@@ -110,7 +142,10 @@ def get_recommendations(user: str = Query(...), db: Session = Depends(get_db)):
                 "score": score
             })
 
-    top_six = sorted(scored, key=lambda x: x["score"], reverse=True)[:6]
-    top = random.sample(top_six, min(3, len(top_six)))
+    # 🔥 Cambio aquí para que las recomendaciones sean más variadas
+    if len(scored) <= 3:
+        top = scored
+    else:
+        top = random.sample(scored, 3)
 
     return {"user": user, "recommendations": top}
